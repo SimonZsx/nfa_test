@@ -30,24 +30,25 @@ def parse_arguments():
   return options,args
 
 def start_master(options, stub):
-  #os.getcwd()
-  #process_stop = subprocess.Popen(cmd_stop, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
-  #process_start = subprocess.Popen(cmd_start, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
-  #for line in iter(process.stdout.readline, ''):
-  #    if line == '.\n':
-  #      break;
 
-  res = stub.LivenessCheck(nfa_msg_pb2.LivenessRequest());
-  if res 
-    print("Client dead")
-    quit(0)
+  res = stub.LivenessCheck(nfa_msg_pb2.LivenessRequest())
 
-  print( "client received"+res.message)
+  if res is None :
+    print("Runtime dead.")  
+  print( "Runtime alive.")
 
-  print "Sleep 3 seconds for initialization..."
-  time.sleep(3)
-  print "Worker initializtion finishes."
-  return process_start
+  ClientStatus = stub.GetRuntimeState(nfa_msg_pb2.GetRuntimeStateReq())
+ 
+  print ClientStatus.port_state.input_port_outgoing_pkts
+  print "Runtime ID: "+str(ClientStatus.local_runtime.runtime_id)
+  #print "Sleep 3 seconds for initialization..."
+  #time.sleep(3)
+  #print "Worker initializtion finishes."
+  return ClientStatus
+
+def read_port_pkts(stub):
+  res = stub.GetRuntimeState(nfa_msg_pb2.GetRuntimeStateReq())
+  return res.port_state.output_port_outgoing_pkts,res.port_state.output_port_dropped_pkts
 
 def read_pkts():
   cmd="~/bess/bessctl/bessctl show port"
@@ -104,40 +105,40 @@ def test(stub):
 #  if options.test_type == "THROUGHPUT":
   print "Start Testing Throughput"
 
-  before_received,before_dropped = read_pkts()
+  before_received,before_dropped = read_port_pkts(stub)
   before_time = time.time() * 1000
 
   time.sleep(10)
 
-  after_received, after_dropped = read_pkts()
+  after_received, after_dropped = read_port_pkts(stub)
   after_time = time.time() * 1000
 
   print "Stop testing"
   #stop_traffic_gen(options)
   time.sleep(1)
-  process_stop = subprocess.Popen(cmd_stop, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
-  os.killpg(os.getpgid(master_process.pid), signal.SIGTERM)
+  #process_stop = subprocess.Popen(cmd_stop, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
+ # os.killpg(os.getpgid(master_process.pid), signal.SIGTERM)
 
   #logto_output_file(options, after_received-before_received, after_dropped-before_dropped, after_dropped-before_dropped, recovery_time, migration_time)
   return after_received-before_received, after_dropped-before_dropped, after_time-before_time
 
-def start_grpc():
+def start_grpc(addr):
 
-  channel = grpc.insecure_channel('localhost:50051')
+  channel = grpc.insecure_channel(addr)
   
   return channel
 
   #stub = nfa_grpc.GreeterStub(channel)
-  #response = stub.SayHello(helloworld_pb2.HelloRequest(name='you'))
+  response = stub.SayHello(helloworld_pb2.HelloRequest(name='you'))
   #print("Greeter client received: " + response.message)
 
 def main():
 
-  channel = start_grpc()
-  stub = nfa_msg_pb2_grpc.GreeterStub(channel)
+  channel1 = start_grpc('localhost:10240')
+  stub1 = nfa_msg_pb2_grpc.Runtime_RPCStub(channel1)
 
-  packet_out, packet_dropped, duration_time = test(stub)
-  print packet_out+' '+packet_dropped+' '+duration_time
+  packet_out, packet_dropped, duration_time = test(stub1)
+  print str(packet_out)+' '+str(packet_dropped)+' '+str(duration_time)
 
 if __name__ == '__main__':
     main()
